@@ -1,0 +1,13 @@
+{
+  "name": "easy_manus",
+  "version": "1.0.0",
+  "description": "Easy Manus frontend project",
+  "main": "index.js",
+  "scripts": {
+    "start": "npx serve frontend",
+    "dev": "npx serve frontend"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manus — AI Agent</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ═══════════════════════════════════════
+       OVERLAY BACKDROP (closes file panel)
+  ════════════════════════════════════════ -->
+  <div
+    class="panel-backdrop"
+    :class="{ active: selectedFile }"
+    @click="closeFile"
+  ></div>
+
+  <!-- ═══════════════════════════════════════
+       LEFT SIDEBAR — Task List
+  ════════════════════════════════════════ -->
+  <aside class="sidebar">
+
+    <!-- Brand -->
+    <div class="sidebar-brand">
+      <div class="brand-logo">
+        <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+          <rect width="30" height="30" rx="9" fill="#22C55E"/>
+          <path d="M8 15h14" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+          <path d="M15 8l7 7-7 7" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <span class="brand-name">Manus</span>
+    </div>
+
+    <!-- New task -->
+    <button class="new-task-btn" @click="createNewTask">
+      <!-- plus icon -->
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <path d="M12 5v14M5 12h14"/>
+      </svg>
+      新建任务
+    </button>
+
+    <div class="section-label">近期任务</div>
+
+    <!-- Task list -->
+    <div class="task-list">
+      <div
+        v-for="task in tasks"
+        :key="task.id"
+        class="task-item"
+        :class="{ active: activeTaskId === task.id }"
+        @click="setActiveTask(task.id)"
+      >
+        <div class="status-dot" :class="task.status"></div>
+        <div class="task-info">
+          <span class="task-title">{{ task.title }}</span>
+          <div class="task-meta">
+            <span class="task-time">{{ task.time }}</span>
+            <span v-if="task.total > 0" class="step-badge" :class="stepBadgeClass(task)">
+              {{ task.done }}/{{ task.total }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer / User -->
+    <div class="sidebar-footer">
+      <div class="user-avatar">U</div>
+      <div>
+        <div class="user-name">用户</div>
+        <div class="user-plan">Pro Plan</div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ═══════════════════════════════════════
+       CENTER — Chat Main
+  ════════════════════════════════════════ -->
+  <main class="chat-main">
+
+    <!-- Header -->
+    <div class="chat-header">
+      <div class="chat-title-wrap">
+        <span class="chat-title">{{ activeTask ? activeTask.title : '新对话' }}</span>
+        <span v-if="activeTask" class="status-badge" :class="activeTask.status">
+          <template v-if="activeTask.status === 'completed'">已完成</template>
+          <template v-else-if="activeTask.status === 'running'">进行中</template>
+          <template v-else>待处理</template>
+        </span>
+      </div>
+    </div>
+
+    <!-- Messages area -->
+    <div class="messages-area" ref="messages">
+
+      <!-- Welcome screen (empty task) -->
+      <div v-if="messages.length === 0" class="welcome-screen">
+        <div class="welcome-logo">
+          <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
+            <rect width="52" height="52" rx="15" fill="#22C55E"/>
+            <path d="M14 26h24" stroke="white" stroke-width="2.8" stroke-linecap="round"/>
+            <path d="M26 14l12 12-12 12" stroke="white" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h2 class="welcome-title">我是 Manus</h2>
+        <p class="welcome-sub">我能够自主完成复杂任务——研究分析、代码开发、文档写作，以及更多。</p>
+        <div class="suggestions">
+          <button class="sugg-btn" @click="useSuggestion('分析当前AI市场的竞争格局和主要玩家')">分析 AI 市场竞争格局</button>
+          <button class="sugg-btn" @click="useSuggestion('帮我开发一个Python异步数据采集脚本')">开发 Python 数据采集脚本</button>
+          <button class="sugg-btn" @click="useSuggestion('帮我起草一份完整的商业计划书')">起草商业计划书</button>
+          <button class="sugg-btn" @click="useSuggestion('整理并深度分析这份市场调研数据')">整理分析市场调研数据</button>
+        </div>
+      </div>
+
+      <!-- Message rows -->
+      <div
+        v-for="msg in messages"
+        :key="msg.id"
+        class="msg-row"
+        :class="msg.role"
+      >
+        <!-- ── AI Message ── -->
+        <template v-if="msg.role === 'assistant'">
+
+          <!-- Avatar -->
+          <div class="msg-avatar avatar-ai">
+            <svg width="20" height="20" viewBox="0 0 30 30" fill="none">
+              <rect width="30" height="30" rx="9" fill="#22C55E"/>
+              <path d="M8 15h14" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+              <path d="M15 8l7 7-7 7" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+
+          <div class="msg-body">
+
+            <!-- Text bubble -->
+            <div class="bubble bubble-ai">
+              <span v-html="formatMessage(msg.content)"></span>
+              <span v-if="msg.typing" class="cursor"></span>
+            </div>
+
+            <!-- Steps -->
+            <div v-if="msg.steps && msg.steps.length" class="steps-list">
+              <div
+                v-for="step in msg.steps"
+                :key="step.id"
+                class="step-row"
+                :class="step.status"
+              >
+                <div class="step-icon">
+                  <!-- Completed checkmark -->
+                  <svg v-if="step.status === 'completed'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  <!-- Running spinner -->
+                  <svg v-else-if="step.status === 'running'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                  </svg>
+                  <!-- Pending circle -->
+                  <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="9"/>
+                  </svg>
+                </div>
+                <span>{{ step.text }}</span>
+              </div>
+            </div>
+
+            <!-- File outputs -->
+            <div v-if="msg.files && msg.files.length" class="files-section">
+              <div class="files-label">产出文件</div>
+              <div class="file-chips">
+                <div
+                  v-for="file in msg.files"
+                  :key="file.id"
+                  class="file-chip"
+                  @click="openFile(file)"
+                >
+                  <!-- document icon -->
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                  <span>{{ file.name }}</span>
+                  <!-- external link icon -->
+                  <svg class="chip-arrow" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <div class="msg-time">{{ msg.time }}</div>
+          </div>
+        </template>
+
+        <!-- ── User Message ── -->
+        <template v-else>
+          <div class="msg-body">
+            <div class="bubble bubble-user">{{ msg.content }}</div>
+            <div class="msg-time">{{ msg.time }}</div>
+          </div>
+          <div class="msg-avatar avatar-user">U</div>
+        </template>
+
+      </div>
+
+      <!-- Planning indicator -->
+      <div v-if="isTyping" class="msg-row assistant">
+        <div class="msg-avatar avatar-ai">
+          <svg width="20" height="20" viewBox="0 0 30 30" fill="none">
+            <rect width="30" height="30" rx="9" fill="#22C55E"/>
+            <path d="M8 15h14" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+            <path d="M15 8l7 7-7 7" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="msg-body">
+          <div class="bubble bubble-ai planning-indicator">
+            <span class="planning-text">规划中</span>
+            <span class="planning-dots">
+              <span></span><span></span><span></span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /messages-area -->
+
+    <!-- Input area -->
+    <div class="input-area">
+      <div class="input-box">
+        <textarea
+          ref="textarea"
+          class="msg-textarea"
+          v-model="inputText"
+          placeholder="向 Manus 发送消息…"
+          rows="1"
+          @keydown.enter="handleEnter"
+          @input="autoResize"
+        ></textarea>
+        <div class="input-toolbar">
+          <span class="input-hint">Enter 发送 · Shift+Enter 换行</span>
+          <button
+            class="send-btn"
+            :class="{ active: inputText.trim() }"
+            :disabled="!inputText.trim() || isTyping"
+            @click="sendMessage"
+            title="发送"
+          >
+            <!-- arrow-up icon -->
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="19" x2="12" y2="5"/>
+              <polyline points="5 12 12 5 19 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════
+       RIGHT PANEL — File Viewer
+       slides in from right on file click
+  ════════════════════════════════════════ -->
+  <div class="file-panel" :class="{ open: selectedFile }">
+
+    <!-- Panel header -->
+    <div class="panel-header" v-if="selectedFile">
+      <div class="panel-file-name">
+        <!-- document icon -->
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        <span>{{ selectedFile.name }}</span>
+      </div>
+      <div class="panel-actions">
+        <!-- Copy -->
+        <button class="icon-btn" @click="copyContent" title="复制内容">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+          </svg>
+        </button>
+        <!-- Close -->
+        <button class="icon-btn danger" @click="closeFile" title="关闭">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- File meta bar -->
+    <div class="file-meta-bar" v-if="selectedFile">
+      <span class="type-badge" :class="typeBadgeClass(selectedFile)">
+        {{ selectedFile.type }}
+      </span>
+      <span class="file-size">{{ selectedFile.size }}</span>
+    </div>
+
+    <!-- File content -->
+    <div class="panel-body" v-if="selectedFile">
+      <div class="file-content-area" v-html="renderFileContent(selectedFile)"></div>
+    </div>
+
+  </div>
+
+  <!-- Toast notification -->
+  <div class="toast" :class="{ show: showToast }">
+    <div class="toast-dot"></div>
+    已复制到剪贴板
+  </div>
+
+</div><!-- /#app -->
+
+<!-- Vue 3 CDN -->
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
